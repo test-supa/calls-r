@@ -77,10 +77,10 @@ def run_scheduler_loop():
                 sched_time = str(item.get("schedule_time", "")).strip().upper()
                 csv_file = item.get("csv_file", "dallas_247_roofers.csv")
                 status = item.get("status", "pending")
-                item_id = item.get("id")
-                
                 if status == "pending" and (sched_time == "NOW" or sched_time == now_time or len(sched_time) > 8):
-                    logging.info(f"⚡ TARGET CAMPAIGN TRIGGERED ({sched_time})! Launching campaign for '{csv_file}'...")
+                    is_db_campaign = csv_file in ["supabase_leads", "supabase"]
+                    logging.info(f"⚡ TARGET CAMPAIGN TRIGGERED ({sched_time})! Source: {'Supabase Database (calls_ai_leads)' if is_db_campaign else csv_file}")
+
                     
                     item["status"] = "in_progress"
                     save_schedule(items)
@@ -90,26 +90,23 @@ def run_scheduler_loop():
                     py_bin = sys.executable
                     csv_path = os.path.join(os.path.dirname(__file__), csv_file)
                     
-                    if not os.path.exists(csv_path) and not csv_file.startswith("http"):
-                        # Default fallback to dallas_247_roofers.csv if specified file not found
-                        if os.path.exists(os.path.join(os.path.dirname(__file__), "dallas_247_roofers.csv")):
-                            csv_file = "dallas_247_roofers.csv"
-                            csv_path = os.path.join(os.path.dirname(__file__), csv_file)
-                        else:
-                            logging.error(f"❌ Target CSV file not found: {csv_path}")
-                            item["status"] = "failed_missing_file"
-                            if item_id:
-                                update_supabase_schedule_status(item_id, "failed_missing_file")
-                            continue
+                    if not is_db_campaign and not os.path.exists(csv_path) and not csv_file.startswith("http"):
+                        logging.error(f"❌ Target CSV file not found: {csv_path}")
+                        item["status"] = "failed_missing_file"
+                        if item_id:
+                            update_supabase_schedule_status(item_id, "failed_missing_file")
+                        continue
                             
-                    cmd = [py_bin, "dialer.py", "--csv", csv_file]
-                    logging.info(f"📲 Executing command: {' '.join(cmd)}")
+                    cmd = [py_bin, "dialer.py", "--csv", csv_file, "--auto-queue"]
+                    logging.info(f"🚀 Launching Outbound Dialer process: {' '.join(cmd)}")
                     subprocess.Popen(cmd, cwd=os.path.dirname(__file__))
                     
                     item["status"] = "completed"
                     if item_id:
                         update_supabase_schedule_status(item_id, "completed")
                     updated = True
+                    logging.info(f"✅ Campaign dispatch process initialized successfully!")
+
                     
             if updated:
                 save_schedule(items)

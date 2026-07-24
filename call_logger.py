@@ -134,9 +134,34 @@ def _sort_into_lead_groups(record: dict) -> None:
     except Exception as e:
         logging.error(f"❌ Failed to sort lead into {group}: {e}")
 
+    # Sync to Supabase if configured
+    try:
+        from supabase_db import sync_call_to_supabase, is_supabase_configured
+        if is_supabase_configured():
+            sync_call_to_supabase(
+                phone_number=record["phone_number"],
+                company_name=record["company_name"],
+                picked_up=record["picked_up"],
+                duration_seconds=record["call_duration_seconds"],
+                outcome=record["outcome"],
+                group_name=group,
+                transcript=t
+            )
+    except Exception as sb_err:
+        logging.error(f"❌ Supabase sync warning: {sb_err}")
+
 
 def get_all_group_data() -> dict:
     """Returns JSON dictionary of all 3 lead groups and scheduled campaigns for dashboard API."""
+    try:
+        from supabase_db import get_supabase_group_data, is_supabase_configured
+        if is_supabase_configured():
+            sb_data = get_supabase_group_data()
+            if any(sb_data.values()):
+                return sb_data
+    except Exception:
+        pass
+
     def parse_csv(path):
         if not os.path.exists(path):
             return []
@@ -168,6 +193,7 @@ def get_all_group_data() -> dict:
     return {
         "human": parse_csv(GROUP1_PATH),
         "voicemail": parse_csv(GROUP2_PATH),
+
         "unanswered": parse_csv(GROUP3_PATH),
         "scheduled": sched_items
     }

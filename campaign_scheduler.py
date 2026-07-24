@@ -17,6 +17,19 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 SCHEDULE_FILE = os.path.join(os.path.dirname(__file__), "campaign_schedule.json")
 
 def load_schedule():
+    # Try loading from Supabase first if configured
+    try:
+        from supabase_db import is_supabase_configured, SUPABASE_URL, SUPABASE_KEY
+        if is_supabase_configured():
+            headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+            res = requests.get(f"{SUPABASE_URL}/rest/v1/calls_ai_campaign_schedules?status=eq.pending", headers=headers, timeout=8)
+            if res.status_code == 200:
+                sb_items = res.json()
+                if sb_items:
+                    return sb_items
+    except Exception:
+        pass
+
     if not os.path.exists(SCHEDULE_FILE):
         return []
     try:
@@ -33,9 +46,20 @@ def save_schedule(items):
     except Exception as e:
         logging.error(f"❌ Failed to save campaign schedule: {e}")
 
+def update_supabase_schedule_status(item_id: str, new_status: str):
+    try:
+        from supabase_db import is_supabase_configured, SUPABASE_URL, SUPABASE_KEY
+        if is_supabase_configured() and item_id:
+            headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}", "Content-Type": "application/json"}
+            url = f"{SUPABASE_URL}/rest/v1/calls_ai_campaign_schedules?id=eq.{item_id}"
+            requests.patch(url, headers=headers, json={"status": new_status}, timeout=8)
+    except Exception as e:
+        logging.error(f"❌ Failed to update Supabase schedule status: {e}")
+
 def run_scheduler_loop():
-    logging.info("🚀 24/7 Cloud Campaign Scheduler started (polling every 10s)...")
+    logging.info("🚀 24/7 Cloud Campaign Scheduler started (polling Supabase & local every 10s)...")
     
+    import requests
     while True:
         try:
             now_time = datetime.now().strftime("%H:%M")
@@ -43,28 +67,41 @@ def run_scheduler_loop():
             updated = False
             
             for item in items:
-                sched_time = item.get("schedule_time")
-                csv_file = item.get("csv_file")
+                sched_time = str(item.get("schedule_time", "")).strip().upper()
+                csv_file = item.get("csv_file", "dallas_247_roofers.csv")
                 status = item.get("status", "pending")
+                item_id = item.get("id")
                 
-                if status == "pending" and sched_time == now_time:
-                    logging.info(f"⚡ TARGET SCHEDULED TIME REACHED ({now_time})! Triggering campaign for '{csv_file}'...")
+                if status == "pending" and (sched_time == "NOW" or sched_time == now_time or len(sched_time) > 8):
+                    logging.info(f"⚡ TARGET CAMPAIGN TRIGGERED ({sched_time})! Launching campaign for '{csv_file}'...")
+                    
                     item["status"] = "in_progress"
                     save_schedule(items)
+                    if item_id:
+                        update_supabase_schedule_status(item_id, "in_progress")
                     
-                    # Determine python path
                     py_bin = sys.executable
                     csv_path = os.path.join(os.path.dirname(__file__), csv_file)
                     
-                    if not os.path.exists(csv_path):
-                        logging.error(f"❌ Target CSV file not found: {csv_path}")
-                        item["status"] = "failed_missing_file"
-                    else:
-                        cmd = [py_bin, "dialer.py", "--csv", csv_file]
-                        logging.info(f"📲 Executing command: {' '.join(cmd)}")
-                        subprocess.Popen(cmd, cwd=os.path.dirname(__file__))
-                        item["status"] = "completed"
-                        
+                    if not os.path.exists(csv_path) and not csv_file.startswith("http"):
+                        # Default fallback to dallas_247_roofers.csv if specified file not found
+                        if os.path.exists(os.path.join(os.path.dirname(__file__), "dallas_247_roofers.csv")):
+                            csv_file = "dallas_247_roofers.csv"
+                            csv_path = os.path.join(os.path.dirname(__file__), csv_file)
+                        else:
+                            logging.error(f"❌ Target CSV file not found: {csv_path}")
+                            item["status"] = "failed_missing_file"
+                            if item_id:
+                                update_supabase_schedule_status(item_id, "failed_missing_file")
+                            continue
+                            
+                    cmd = [py_bin, "dialer.py", "--csv", csv_file]
+                    logging.info(f"📲 Executing command: {' '.join(cmd)}")
+                    subprocess.Popen(cmd, cwd=os.path.dirname(__file__))
+                    
+                    item["status"] = "completed"
+                    if item_id:
+                        update_supabase_schedule_status(item_id, "completed")
                     updated = True
                     
             if updated:
@@ -77,3 +114,4 @@ def run_scheduler_loop():
 
 if __name__ == "__main__":
     run_scheduler_loop()
+

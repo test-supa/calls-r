@@ -219,19 +219,22 @@ async def main():
                 add_to_queue(args.phone, args.name, reason="single_dial_failed", queue_type="retry")
             return
 
-        if not os.path.exists(args.csv):
-            logging.error(f"❌ CSV file '{args.csv}' not found!")
-            sys.exit(1)
+        if args.csv in ["supabase_leads", "supabase"] or not os.path.exists(args.csv):
+            from supabase_db import get_supabase_pending_leads, is_supabase_configured
+            if is_supabase_configured() or args.csv in ["supabase_leads", "supabase"]:
+                rows = get_supabase_pending_leads()
+                if not rows and os.path.exists(os.path.join(os.path.dirname(__file__), "dallas_247_roofers.csv")):
+                    with open(os.path.join(os.path.dirname(__file__), "dallas_247_roofers.csv"), mode="r", encoding="utf-8") as f:
+                        rows = list(csv.DictReader(f))
+            else:
+                logging.error(f"❌ CSV file '{args.csv}' not found!")
+                sys.exit(1)
+        else:
+            logging.info(f"📂 Reading target contractors from {args.csv}...")
+            with open(args.csv, mode="r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                rows = list(reader)
 
-        # Before starting CSV, process any pending priority callbacks if --auto-queue is enabled
-        if args.auto_queue:
-            logging.info("🔍 Checking priority missed call queue before dialing new leads...")
-            await process_queue(lkapi, trunk_id, args.delay)
-
-        logging.info(f"📂 Reading target contractors from {args.csv}...")
-        with open(args.csv, mode="r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            rows = list(reader)
 
         logging.info(f"📊 Found {len(rows)} target contractors. Starting multi-line outbound campaign across 3 rotating numbers...")
         

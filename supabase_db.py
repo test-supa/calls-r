@@ -149,3 +149,29 @@ def get_supabase_group_data() -> dict:
     except Exception as e:
         logging.error(f"❌ Error fetching group data from Supabase: {e}")
         return {"human": [], "voicemail": [], "unanswered": [], "scheduled": []}
+
+
+def get_supabase_pending_leads() -> list[dict]:
+
+    """Fetches all pending leads directly from Supabase calls_ai_leads table."""
+    if not is_supabase_configured():
+        return []
+    headers = _get_headers()
+    url = f"{SUPABASE_URL}/rest/v1/calls_ai_leads?outcome=eq.pending&select=*"
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.status_code == 200:
+            rows = []
+            for item in res.json():
+                rows.append({
+                    "PhoneNumber": item.get("phone_number"),
+                    "CompanyName": item.get("company_name", "Lead"),
+                    "ContactName": "Owner",
+                    "Status": "pending"
+                })
+            logging.info(f"☁️ Fetched {len(rows)} pending leads directly from Supabase DB!")
+            return rows
+    except Exception as e:
+        logging.error(f"❌ Error fetching pending leads from Supabase: {e}")
+    return []
+

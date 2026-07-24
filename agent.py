@@ -875,13 +875,13 @@ async def start_dashboard_web_server():
         app.router.add_get("/api/download/{group}", handle_api_download)
         app.router.add_post("/api/schedule", handle_api_schedule)
 
-        runner = web.AppRunner(app)
-        await runner.setup()
-        site = web.TCPSite(runner, "0.0.0.0", 8081)
+        port = int(os.environ.get("PORT", 8081))
+        site = web.TCPSite(runner, "0.0.0.0", port)
         await site.start()
-        logging.info("🌐 Web Dashboard & Lead Group API online at http://0.0.0.0:8081/dashboard")
+        logging.info(f"🌐 Web Dashboard & Lead Group API online at http://0.0.0.0:{port}/dashboard")
     except Exception as e:
         logging.error(f"⚠️ Web Dashboard server startup warning: {e}")
+
 
 
 if __name__ == "__main__":

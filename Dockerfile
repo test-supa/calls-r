@@ -21,8 +21,8 @@ COPY . .
 # Make startup script executable
 RUN chmod +x start_services.sh
 
-# Expose port for health checks / agent worker
-EXPOSE 8081
+# Expose port 8080 (Web Dashboard) and 8081 (Health Checks)
+EXPOSE 8080 8081
 
 # Command to run 24/7 background worker
 CMD ["./start_services.sh"]

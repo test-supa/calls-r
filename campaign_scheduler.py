@@ -74,18 +74,19 @@ def run_scheduler_loop():
             updated = False
             
             for item in items:
+                item_id = item.get("id")
                 sched_time = str(item.get("schedule_time", "")).strip().upper()
                 csv_file = item.get("csv_file", "dallas_247_roofers.csv")
                 status = item.get("status", "pending")
                 if status == "pending" and (sched_time == "NOW" or sched_time == now_time or len(sched_time) > 8):
                     is_db_campaign = csv_file in ["supabase_leads", "supabase"]
                     logging.info(f"⚡ TARGET CAMPAIGN TRIGGERED ({sched_time})! Source: {'Supabase Database (calls_ai_leads)' if is_db_campaign else csv_file}")
-
                     
                     item["status"] = "in_progress"
                     save_schedule(items)
                     if item_id:
                         update_supabase_schedule_status(item_id, "in_progress")
+
                     
                     py_bin = sys.executable
                     csv_path = os.path.join(os.path.dirname(__file__), csv_file)

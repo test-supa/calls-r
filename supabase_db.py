@@ -12,8 +12,14 @@ from datetime import datetime
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+raw_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+if raw_url.endswith("/rest/v1"):
+    SUPABASE_URL = raw_url[:-8].rstrip("/")
+else:
+    SUPABASE_URL = raw_url
+
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+
 
 def _get_headers():
     return {

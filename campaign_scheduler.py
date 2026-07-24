@@ -9,8 +9,9 @@ import sys
 import json
 import time
 import logging
-import subprocess
+import requests
 from datetime import datetime
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -26,9 +27,15 @@ def load_schedule():
             if res.status_code == 200:
                 sb_items = res.json()
                 if sb_items:
+                    logging.info(f"☁️ Fetched {len(sb_items)} pending campaign schedule(s) from Supabase!")
                     return sb_items
-    except Exception:
-        pass
+            else:
+                logging.warning(f"⚠️ Supabase schedule fetch returned HTTP {res.status_code}: {res.text}")
+        else:
+            logging.info("ℹ️ SUPABASE_URL/KEY not configured in env; checking local campaign_schedule.json")
+    except Exception as err:
+        logging.error(f"❌ Error polling Supabase campaign schedules: {err}")
+
 
     if not os.path.exists(SCHEDULE_FILE):
         return []

@@ -71,8 +71,12 @@ def run_scheduler_loop():
     import requests
     while True:
         try:
-            now_utc = datetime.utcnow().strftime("%H:%M")
-            now_local = datetime.now().strftime("%H:%M")
+            from datetime import timezone, timedelta
+            now_utc_dt = datetime.now(timezone.utc)
+            now_utc = now_utc_dt.strftime("%H:%M")
+            now_dhaka = (now_utc_dt + timedelta(hours=6)).strftime("%H:%M")
+            now_est = (now_utc_dt - timedelta(hours=4)).strftime("%H:%M")
+            now_cst = (now_utc_dt - timedelta(hours=5)).strftime("%H:%M")
             items = load_schedule()
             updated = False
             
@@ -82,13 +86,13 @@ def run_scheduler_loop():
                 csv_file = item.get("csv_file", "dallas_247_roofers.csv")
                 status = item.get("status", "pending")
                 
-                # Timezone-smart check: Matches NOW, UTC time, or Local time
+                # Multi-timezone check: Matches NOW, Dhaka (UTC+6), UTC, EST, or CST
                 is_due = (
                     sched_time in ["NOW", "IMMEDIATE"] or
-                    sched_time == now_utc or
-                    sched_time == now_local or
+                    sched_time in [now_dhaka, now_utc, now_est, now_cst] or
                     len(sched_time) > 8
                 )
+
                 
                 if status == "pending" and is_due:
                     is_db_campaign = csv_file in ["supabase_leads", "supabase"]

@@ -46,12 +46,28 @@ _key_cache_mtime = 0
 
 
 def _load_keys(force_reload: bool = False) -> dict:
-    """Loads API keys from api_keys.json with file-change caching."""
+    """Loads API keys from api_keys.json or API_KEYS_JSON env var with caching."""
     global _key_cache, _key_cache_mtime
 
+    # If api_keys.json does not exist on disk, check if provided via environment variable
     if not os.path.exists(KEYS_PATH):
-        logging.error(f"❌ API keys file not found: {KEYS_PATH}")
-        return {"gladia": [], "cartesia": []}
+        env_keys_json = os.environ.get("API_KEYS_JSON") or os.environ.get("API_KEYS_JSON_CONTENT")
+        if env_keys_json:
+            try:
+                data = json.loads(env_keys_json)
+                with open(KEYS_PATH, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+                logging.info(f"💾 Initialized api_keys.json from environment variable API_KEYS_JSON")
+            except Exception as env_err:
+                logging.error(f"❌ Failed to parse API_KEYS_JSON env var: {env_err}")
+
+    if not os.path.exists(KEYS_PATH):
+        gladia_env = os.environ.get("GLADIA_API_KEY")
+        cartesia_env = os.environ.get("CARTESIA_API_KEY")
+        gladia_list = [{"key": gladia_env, "email": "env", "status": "active", "exhausted_until": None}] if gladia_env else []
+        cartesia_list = [{"key": cartesia_env, "email": "env", "status": "active", "exhausted_until": None}] if cartesia_env else []
+        return {"gladia": gladia_list, "cartesia": cartesia_list}
+
 
     mtime = os.path.getmtime(KEYS_PATH)
     if _key_cache and mtime == _key_cache_mtime and not force_reload:
@@ -65,6 +81,7 @@ def _load_keys(force_reload: bool = False) -> dict:
     except Exception as e:
         logging.error(f"❌ Failed to load API keys: {e}")
         return {"gladia": [], "cartesia": []}
+
 
 
 def _save_keys(data: dict):

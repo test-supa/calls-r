@@ -10,7 +10,9 @@ import json
 import time
 import logging
 import requests
+import subprocess
 from datetime import datetime
+
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

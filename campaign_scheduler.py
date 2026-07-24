@@ -71,7 +71,8 @@ def run_scheduler_loop():
     import requests
     while True:
         try:
-            now_time = datetime.now().strftime("%H:%M")
+            now_utc = datetime.utcnow().strftime("%H:%M")
+            now_local = datetime.now().strftime("%H:%M")
             items = load_schedule()
             updated = False
             
@@ -80,9 +81,19 @@ def run_scheduler_loop():
                 sched_time = str(item.get("schedule_time", "")).strip().upper()
                 csv_file = item.get("csv_file", "dallas_247_roofers.csv")
                 status = item.get("status", "pending")
-                if status == "pending" and (sched_time == "NOW" or sched_time == now_time or len(sched_time) > 8):
+                
+                # Timezone-smart check: Matches NOW, UTC time, or Local time
+                is_due = (
+                    sched_time in ["NOW", "IMMEDIATE"] or
+                    sched_time == now_utc or
+                    sched_time == now_local or
+                    len(sched_time) > 8
+                )
+                
+                if status == "pending" and is_due:
                     is_db_campaign = csv_file in ["supabase_leads", "supabase"]
                     logging.info(f"⚡ TARGET CAMPAIGN TRIGGERED ({sched_time})! Source: {'Supabase Database (calls_ai_leads)' if is_db_campaign else csv_file}")
+
                     
                     item["status"] = "in_progress"
                     save_schedule(items)

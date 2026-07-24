@@ -812,11 +812,81 @@ INSTRUCTION: Use these details naturally to customize your pitch. For example:
         await asyncio.sleep(1.2)
         logging.info("🗣️ AI initiating auto-callback conversation...")
         session.say("Hi there, this is Sarah calling right back! I saw we just missed a call from your number a few minutes ago while all our lines were busy—hope you're having a great day! Do you have just a quick moment?")
-    elif not is_inbound:
-        await asyncio.sleep(1.2)  # Short natural pause before speaking
-        logging.info("🗣️ AI initiating outbound conversation...")
-        session.say("Hey there! This is Sarah calling—I think my phone line cut out when I tried calling yesterday, so I'm really sorry about that! Do you have just a quick moment?")
+async def start_dashboard_web_server():
+    """Starts built-in Web Dashboard HTTP server on Railway port 8081."""
+    try:
+        from aiohttp import web
+        app = web.Application()
+
+        async def handle_dashboard(request):
+            dash_path = os.path.join(os.path.dirname(__file__), "dashboard.html")
+            if os.path.exists(dash_path):
+                with open(dash_path, "r", encoding="utf-8") as f:
+                    return web.Response(text=f.read(), content_type="text/html")
+            return web.Response(text="<h1>Dashboard loading...</h1>", content_type="text/html")
+
+        async def handle_api_groups(request):
+            from call_logger import get_all_group_data
+            data = get_all_group_data()
+            return web.json_response(data)
+
+        async def handle_api_download(request):
+            group_name = request.match_info.get("group", "human")
+            file_map = {
+                "human": "group1_humans.csv",
+                "voicemail": "group2_voicemails.csv",
+                "unanswered": "group3_unanswered.csv"
+            }
+            target_name = file_map.get(group_name, "group1_humans.csv")
+            target_path = os.path.join(os.path.dirname(__file__), target_name)
+            if os.path.exists(target_path):
+                with open(target_path, "r", encoding="utf-8") as f:
+                    return web.Response(text=f.read(), content_type="text/csv", headers={"Content-Disposition": f"attachment; filename={target_name}"})
+            return web.Response(text="Timestamp,CompanyName,PhoneNumber,DurationSeconds,Outcome,TranscriptSummary\n", content_type="text/csv")
+
+        async def handle_api_schedule(request):
+            try:
+                body = await request.json()
+                csv_file = body.get("csv_file", "").strip()
+                sched_time = body.get("schedule_time", "").strip()
+                if not csv_file or not sched_time:
+                    return web.json_response({"error": "Missing csv_file or schedule_time"}, status=400)
+                
+                sched_path = os.path.join(os.path.dirname(__file__), "campaign_schedule.json")
+                items = []
+                if os.path.exists(sched_path):
+                    try:
+                        with open(sched_path, "r", encoding="utf-8") as f:
+                            items = json.load(f)
+                    except Exception:
+                        items = []
+                
+                items.append({"csv_file": csv_file, "schedule_time": sched_time, "status": "pending", "created_at": datetime.now().isoformat()})
+                with open(sched_path, "w", encoding="utf-8") as f:
+                    json.dump(items, f, indent=2)
+                
+                return web.json_response({"message": f"Successfully scheduled campaign '{csv_file}' for {sched_time}"})
+            except Exception as e:
+                return web.json_response({"error": str(e)}, status=500)
+
+        app.router.add_get("/", handle_dashboard)
+        app.router.add_get("/dashboard", handle_dashboard)
+        app.router.add_get("/api/groups", handle_api_groups)
+        app.router.add_get("/api/download/{group}", handle_api_download)
+        app.router.add_post("/api/schedule", handle_api_schedule)
+
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, "0.0.0.0", 8081)
+        await site.start()
+        logging.info("🌐 Web Dashboard & Lead Group API online at http://0.0.0.0:8081/dashboard")
+    except Exception as e:
+        logging.error(f"⚠️ Web Dashboard server startup warning: {e}")
 
 
 if __name__ == "__main__":
+    # Start Web Dashboard background server task before LiveKit CLI worker
+    loop = asyncio.get_event_loop()
+    loop.create_task(start_dashboard_web_server())
     cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, agent_name="roofer_agent"))
+

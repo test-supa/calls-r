@@ -86,6 +86,93 @@ def _update_csv_summary(record: dict) -> None:
     except Exception as e:
         logging.error(f"❌ Failed to update CSV summary: {e}")
 
+    # Automatically sort into 3 operational lead groups
+    _sort_into_lead_groups(record)
+
+
+GROUP1_PATH = os.path.join(LOGS_DIR, "group1_humans.csv")
+GROUP2_PATH = os.path.join(LOGS_DIR, "group2_voicemails.csv")
+GROUP3_PATH = os.path.join(LOGS_DIR, "group3_unanswered.csv")
+
+
+def _sort_into_lead_groups(record: dict) -> None:
+    """Sorts a call record into Group 1 (Humans), Group 2 (Voicemails 2s cut), or Group 3 (Unanswered)."""
+    t = record.get("full_transcript", [])
+    dur = record.get("call_duration_seconds", 0)
+    outcome = record.get("outcome", "")
+    user_text = ' '.join([turn['text'] for turn in t if turn['role'] == 'user']).lower()
+
+    is_vm = outcome in ["voicemail_saved", "machine_detected", "voicemail_left"] or any(k in user_text for k in ["tone", "record your message", "not available", "leave your message", "mensaje", "deje su mensaje", "press 1"])
+    
+    if outcome == "machine_detected" or (dur <= 6.0 and is_vm) or outcome == "voicemail_saved":
+        group = "group2_voicemails"
+        target_path = GROUP2_PATH
+    elif record.get("picked_up") and len(t) > 1 and not is_vm:
+        group = "group1_humans"
+        target_path = GROUP1_PATH
+    else:
+        group = "group3_unanswered"
+        target_path = GROUP3_PATH
+
+    file_exists = os.path.exists(target_path)
+    try:
+        with open(target_path, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(["Timestamp", "CompanyName", "PhoneNumber", "DurationSeconds", "Outcome", "TranscriptSummary"])
+            
+            transcript_summary = " | ".join([f"{turn['role']}: {turn['text'][:80]}" for turn in t[:3]])
+            writer.writerow([
+                record["timestamp"],
+                record["company_name"],
+                record["phone_number"],
+                record["call_duration_seconds"],
+                record["outcome"],
+                transcript_summary
+            ])
+        logging.info(f"📁 Sorted lead into {group}: {record['company_name']} ({record['phone_number']})")
+    except Exception as e:
+        logging.error(f"❌ Failed to sort lead into {group}: {e}")
+
+
+def get_all_group_data() -> dict:
+    """Returns JSON dictionary of all 3 lead groups and scheduled campaigns for dashboard API."""
+    def parse_csv(path):
+        if not os.path.exists(path):
+            return []
+        items = []
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for r in reader:
+                    items.append({
+                        "company": r.get("CompanyName", "Lead"),
+                        "phone": r.get("PhoneNumber", ""),
+                        "duration": r.get("DurationSeconds", 0),
+                        "status": r.get("Outcome", "recorded"),
+                        "transcript": [{"role": "info", "text": r.get("TranscriptSummary", "")}]
+                    })
+        except Exception:
+            pass
+        return items
+
+    sched_path = os.path.join(LOGS_DIR, "campaign_schedule.json")
+    sched_items = []
+    if os.path.exists(sched_path):
+        try:
+            with open(sched_path, "r", encoding="utf-8") as f:
+                sched_items = json.load(f)
+        except Exception:
+            pass
+
+    return {
+        "human": parse_csv(GROUP1_PATH),
+        "voicemail": parse_csv(GROUP2_PATH),
+        "unanswered": parse_csv(GROUP3_PATH),
+        "scheduled": sched_items
+    }
+
+
 
 def extract_transcript_from_history(history_dict: dict) -> list[dict]:
     """Extracts a clean transcript from LiveKit's session.history.to_dict() output.

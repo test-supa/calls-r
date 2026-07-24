@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice AI Campaign Dashboard & 3-Group Lead Manager</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-card: #1e293b;
+      --bg-card-hover: #334155;
+      --accent-blue: #38bdf8;
+      --accent-green: #4ade80;
+      --accent-yellow: #facc15;
+      --accent-red: #f87171;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-color: #334155;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+    body { background-color: var(--bg-primary); color: var(--text-main); padding: 24px; min-height: 100vh; }
+    
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 16px; }
+    .header h1 { font-size: 24px; font-weight: 700; color: var(--accent-blue); display: flex; align-items: center; gap: 10px; }
+    .status-badge { background: rgba(74, 222, 128, 0.1); color: var(--accent-green); border: 1px solid var(--accent-green); padding: 6px 12px; borderRadius: 20px; font-size: 13px; font-weight: 600; }
+    
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; }
+    .stat-card h3 { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .stat-card .value { font-size: 28px; font-weight: 700; }
+    .stat-card.human .value { color: var(--accent-green); }
+    .stat-card.voicemail .value { color: var(--accent-yellow); }
+    .stat-card.unanswered .value { color: var(--accent-red); }
+    
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); }
+    .tab-btn { background: none; border: none; color: var(--text-muted); padding: 12px 20px; font-size: 14px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+    .tab-btn.active { color: var(--accent-blue); border-bottom-color: var(--accent-blue); }
+    
+    .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .card-title { font-size: 18px; font-weight: 600; }
+    
+    .btn { background: var(--accent-blue); color: #0f172a; font-weight: 600; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; transition: opacity 0.2s; }
+    .btn:hover { opacity: 0.9; }
+    .btn-green { background: var(--accent-green); }
+    .btn-yellow { background: var(--accent-yellow); }
+    
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+    th { background: rgba(255,255,255,0.03); color: var(--text-muted); font-weight: 600; padding: 12px 16px; border-bottom: 1px solid var(--border-color); }
+    td { padding: 12px 16px; border-bottom: 1px solid var(--border-color); }
+    tr:hover { background: var(--bg-card-hover); }
+    
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; z-index: 1000; }
+    .modal { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; width: 90%; max-width: 650px; max-height: 80vh; overflow-y: auto; padding: 24px; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .close-btn { background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; }
+    .transcript-turn { margin-bottom: 12px; padding: 10px; border-radius: 8px; }
+    .transcript-turn.assistant { background: rgba(56, 189, 248, 0.1); border-left: 3px solid var(--accent-blue); }
+    .transcript-turn.user { background: rgba(74, 222, 128, 0.1); border-left: 3px solid var(--accent-green); }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>📞 Voice AI Campaign & 3-Group Lead Manager</h1>
+    <div class="status-badge">🟢 24/7 Cloud Engine Active</div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card human">
+      <h3>Group 1: Humans Answered</h3>
+      <div class="value" id="count-human">0</div>
+    </div>
+    <div class="stat-card voicemail">
+      <h3>Group 2: Voicemails (2s Cut)</h3>
+      <div class="value" id="count-voicemail">0</div>
+    </div>
+    <div class="stat-card unanswered">
+      <h3>Group 3: Unanswered / Retry</h3>
+      <div class="value" id="count-unanswered">0</div>
+    </div>
+    <div class="stat-card">
+      <h3>Scheduled Campaigns</h3>
+      <div class="value" id="count-scheduled">0</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">🕒 Cloud Campaign Scheduler</div>
+    </div>
+    <form id="scheduler-form" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+      <input type="text" id="sched-csv" placeholder="CSV Filename (e.g. dallas_247_roofers.csv)" style="flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); background: #0f172a; color: white;" required>
+      <input type="time" id="sched-time" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); background: #0f172a; color: white;" required>
+      <button type="submit" class="btn btn-green">Schedule Campaign</button>
+    </form>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('human')">👥 Group 1: Humans (<span id="tab-human-cnt">0</span>)</button>
+    <button class="tab-btn" onclick="switchTab('voicemail')">📠 Group 2: Voicemails (<span id="tab-vm-cnt">0</span>)</button>
+    <button class="tab-btn" onclick="switchTab('unanswered')">📵 Group 3: Unanswered (<span id="tab-un-cnt">0</span>)</button>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title" id="current-group-title">Group 1: Humans Answered</div>
+      <a href="#" id="download-csv-btn" class="btn">📥 Download Group CSV</a>
+    </div>
+    <table id="leads-table">
+      <thead>
+        <tr>
+          <th>Company Name</th>
+          <th>Phone Number</th>
+          <th>Duration</th>
+          <th>Outcome / Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="leads-tbody">
+        <tr><td colspan="5" style="text-align:center; color:var(--text-muted);">Loading lead records...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="modal-overlay" id="transcript-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-company">Call Transcript</h3>
+        <button class="close-btn" onclick="closeModal()">&times;</button>
+      </div>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <script>
+    let currentTab = 'human';
+    let globalData = { human: [], voicemail: [], unanswered: [], scheduled: [] };
+
+    async function loadData() {
+      try {
+        const res = await fetch('/api/groups');
+        const data = await res.json();
+        globalData = data;
+        
+        document.getElementById('count-human').innerText = data.human.length;
+        document.getElementById('count-voicemail').innerText = data.voicemail.length;
+        document.getElementById('count-unanswered').innerText = data.unanswered.length;
+        document.getElementById('count-scheduled').innerText = data.scheduled.length;
+
+        document.getElementById('tab-human-cnt').innerText = data.human.length;
+        document.getElementById('tab-vm-cnt').innerText = data.voicemail.length;
+        document.getElementById('tab-un-cnt').innerText = data.unanswered.length;
+
+        renderTable();
+      } catch(e) {
+        console.error("Failed to load dashboard data:", e);
+      }
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      
+      const titles = {
+        human: 'Group 1: Humans Answered (Live Conversations)',
+        voicemail: 'Group 2: Voicemails (Disconnected in 2s)',
+        unanswered: 'Group 3: Unanswered / Declined (Auto-Retry Queue)'
+      };
+      document.getElementById('current-group-title').innerText = titles[tab];
+      document.getElementById('download-csv-btn').href = `/api/download/${tab}`;
+      renderTable();
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('leads-tbody');
+      const list = globalData[currentTab] || [];
+      
+      if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No records found in this group yet.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = list.map((item, idx) => `
+        <tr>
+          <td><strong>${item.company || 'Unknown Company'}</strong></td>
+          <td><code>${item.phone}</code></td>
+          <td>${item.duration ? item.duration + 's' : 'N/A'}</td>
+          <td><span style="color: ${item.duration > 30 ? 'var(--accent-green)' : 'var(--accent-yellow)'}">${item.status || 'recorded'}</span></td>
+          <td>
+            ${item.transcript && item.transcript.length > 0 ? 
+              `<button class="btn" style="padding:4px 10px; font-size:12px;" onclick="viewTranscript('${currentTab}', ${idx})">📜 View Transcript</button>` : 
+              `<span style="color:var(--text-muted);">No speech</span>`}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function viewTranscript(tab, idx) {
+      const item = globalData[tab][idx];
+      document.getElementById('modal-company').innerText = `${item.company} (${item.phone})`;
+      const body = document.getElementById('modal-body');
+      
+      body.innerHTML = (item.transcript || []).map(t => `
+        <div class="transcript-turn ${t.role}">
+          <strong>${t.role === 'assistant' ? '🗣️ Sarah (Voice AI)' : '👤 Prospect / Carrier'}</strong>:
+          <p style="margin-top:4px;">"${t.text}"</p>
+        </div>
+      `).join('');
+
+      document.getElementById('transcript-modal').style.display = 'flex';
+    }
+
+    function closeModal() {
+      document.getElementById('transcript-modal').style.display = 'none';
+    }
+
+    document.getElementById('scheduler-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const csv = document.getElementById('sched-csv').value;
+      const time = document.getElementById('sched-time').value;
+
+      const res = await fetch('/api/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv_file: csv, schedule_time: time })
+      });
+      const data = await res.json();
+      alert(data.message || 'Campaign scheduled!');
+      loadData();
+    });
+
+    loadData();
+    setInterval(loadData, 10000);
+  </script>
+</body>
+</html>

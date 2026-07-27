@@ -116,6 +116,13 @@ def run_scheduler_loop():
                         continue
                             
                     cmd = [py_bin, "dialer.py", "--csv", csv_file, "--auto-queue"]
+                    
+                    # Support batch_limit from schedule entry (limits leads per window)
+                    batch_limit = item.get("batch_limit")
+                    if batch_limit and int(batch_limit) > 0:
+                        cmd.extend(["--limit", str(int(batch_limit))])
+                        logging.info(f"📊 Batch limit set to {batch_limit} leads for this window")
+                    
                     logging.info(f"🚀 Launching Outbound Dialer process: {' '.join(cmd)}")
                     subprocess.Popen(cmd, cwd=os.path.dirname(__file__))
                     

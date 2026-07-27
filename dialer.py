@@ -189,6 +189,7 @@ async def main():
     parser.add_argument("--phone", help="Test dial a single phone number (overrides CSV)")
     parser.add_argument("--name", default="Test Roofer Company", help="Company name for single phone test")
     parser.add_argument("--delay", type=int, default=15, help="Seconds to wait between calls in single-threaded mode")
+    parser.add_argument("--limit", type=int, default=0, help="Maximum number of leads to dial in this batch (0 = unlimited)")
     parser.add_argument("--auto-queue", action="store_true", help="Automatically process missed calls and retry queue alongside CSV")
     parser.add_argument("--process-queue-only", action="store_true", help="Only process pending callbacks/retries in queue")
     args = parser.parse_args()
@@ -240,16 +241,22 @@ async def main():
         
         active_tasks = []
 
+        batch_count = 0  # Track how many leads we've dialed in this batch
+
         async def run_call_task(line_to_use, phone, company, contact):
             success, room_name = await trigger_call(lkapi, trunk_id, phone, company, contact, line=line_to_use)
             if not success:
-                logging.warning(f"⚠️ Call to {company} failed/busy/no-answer. Adding to retry queue...")
-                add_to_queue(phone, company, reason="outbound_busy_or_no_answer", queue_type="retry")
+                logging.info(f"📵 Call to {company} not answered. Will remain pending for next window.")
                 if line_to_use:
                     from phone_lines import mark_line_available
                     mark_line_available(line_to_use["id"], start_cooldown=False)
 
         for i, row in enumerate(rows, 1):
+            # Enforce batch limit if set
+            if args.limit > 0 and batch_count >= args.limit:
+                logging.info(f"🛑 Batch limit reached ({args.limit} leads). Stopping dialer for this window.")
+                break
+
             # Check for any new priority callbacks (missed inbound calls) between outbound dials!
             if args.auto_queue:
                 await process_queue(lkapi, trunk_id, args.delay)
@@ -275,10 +282,11 @@ async def main():
                 await asyncio.sleep(5)
                 line = get_next_available_line()
 
-            logging.info(f"\n--- 📲 SPAWNING CONCURRENT DIAL [{i}/{len(rows)}] {company} ---")
+            logging.info(f"\n--- 📲 SPAWNING DIAL [{i}/{len(rows)}] (Batch {batch_count + 1}/{args.limit or 'unlimited'}) {company} ---")
             update_csv_status(args.csv, phone, "called")
             task = asyncio.create_task(run_call_task(line, phone, company, contact))
             active_tasks.append(task)
+            batch_count += 1
 
             
             logging.info(f"⏳ Waiting {args.delay} seconds before spawning next call...")
